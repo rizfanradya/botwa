@@ -1,34 +1,47 @@
 use ab_glyph::{FontArc, PxScale};
 use base64::Engine as _;
-use image::{Rgb, RgbImage};
-use imageproc::drawing::{draw_text_mut, text_size};
+use image::{Rgb, RgbImage, imageops};
+use imageproc::drawing::draw_text_mut;
+use imageproc::drawing::text_size;
 
 pub async fn handle_sticker_text(text: &str, command: &str) -> String {
-    let font = FontArc::try_from_vec(std::fs::read("fonts/Roboto-Bold.ttf").unwrap()).unwrap();
-    let scale = PxScale::from(60.0);
+    let font = FontArc::try_from_vec(std::fs::read("fonts/Archivo-Regular.ttf").unwrap()).unwrap();
+    let scale = PxScale::from(130.0);
     let mut image = RgbImage::from_pixel(512, 512, Rgb([255, 255, 255]));
-    let line_height = 70;
-    let lines: Vec<&str> = text
+    let mut lines: Vec<String> = Vec::new();
+    let mut current_line = String::new();
+    let words: Vec<&str> = text
         .trim_start_matches(command)
         .trim()
         .split_whitespace()
         .collect();
 
-    for (i, line) in lines.iter().enumerate() {
-        let (w, _) = text_size(scale, &font, line);
-        let x = (512 - w) / 2;
-        let y = (512 / 2) - (line_height / 2) + i as u32 * line_height;
-        draw_text_mut(
-            &mut image,
-            Rgb([0, 0, 0]),
-            x as i32,
-            y as i32,
-            scale,
-            &font,
-            line,
-        );
+    for word in words {
+        let test_line = if current_line.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", current_line, word)
+        };
+        let (line_width, _) = text_size(scale, &font, &test_line);
+        if line_width > 492 as u32 {
+            lines.push(current_line);
+            current_line = word.to_string();
+        } else {
+            current_line = test_line;
+        }
     }
 
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    let mut y = 10;
+    for line in lines.iter() {
+        draw_text_mut(&mut image, Rgb([0, 0, 0]), 10, y as i32, scale, &font, line);
+        y += 130;
+    }
+
+    image = imageops::blur(&image, 4.0);
     let tmp_path = "tmp/output.png";
     image.save(tmp_path).unwrap();
 
