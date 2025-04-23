@@ -49,11 +49,11 @@ pub async fn bot_handler(Json(msg): Json<WhatsAppMessage>) -> impl IntoResponse 
     if let Some(text) = text_opt {
         println!("Pesan masuk dari {}: {}", jid, text);
 
-        if text.starts_with(".bot text ") {
+        if text.starts_with(".bt ") {
             return Json(AxumResponse::Sticker {
-                buffer: utils::sticker_text::handle_sticker_text(&text, ".bot text ").await,
+                buffer: utils::sticker_text::handle_sticker_text(&text, ".bt ").await,
             });
-        } else if text.starts_with(".bot") {
+        } else if text.starts_with(".bm") {
             return Json(AxumResponse::Text {
                 text: utils::menu::bot_menu().await,
             });
