@@ -10,9 +10,17 @@ struct ExtendedTextMessage {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ImageMessage {
+    url: Option<String>,
+    caption: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MessageContent {
     conversation: Option<String>,
     extended_text_message: Option<ExtendedTextMessage>,
+    image_message: Option<ImageMessage>,
 }
 
 #[derive(Deserialize)]
@@ -44,15 +52,43 @@ pub async fn bot_handler(Json(msg): Json<WhatsAppMessage>) -> impl IntoResponse 
         m.conversation
             .clone()
             .or_else(|| m.extended_text_message.as_ref().map(|e| e.text.clone()))
+            .or_else(|| m.image_message.as_ref().and_then(|img| img.caption.clone()))
     });
 
     if let Some(text) = text_opt {
         println!("Pesan masuk dari {}: {}", jid, text);
 
-        if text.starts_with(".bt ") {
+        if text.starts_with(".bts ") {
             return Json(AxumResponse::Sticker {
-                buffer: utils::sticker_text::handle_sticker_text(&text, ".bt ").await,
+                buffer: utils::sticker_text::handle_sticker_text(&text, ".bts ").await,
             });
+        } else if text.starts_with(".bfs") {
+            if let Some(image_message) = msg.message.as_ref().and_then(|m| m.image_message.as_ref())
+            {
+                if let Some(image_url) = &image_message.url {
+                    match reqwest::get(image_url).await {
+                        Ok(response) => {
+                            let content_type = response
+                                .headers()
+                                .get("Content-Type")
+                                .map(|v| v.to_str().unwrap_or("-"))
+                                .unwrap_or("-")
+                                .to_string();
+                            let bytes = response.bytes().await.unwrap();
+                            println!("📦 Content-Type: {}", content_type);
+                            println!("📏 Size: {} bytes", bytes.len());
+                            std::fs::write("tmp/raw_blob.bin", &bytes).unwrap();
+                            let sticker = utils::img_to_stk::handle_sticker_image(&bytes).await;
+                            return Json(AxumResponse::Sticker { buffer: sticker });
+                        }
+                        Err(_) => {
+                            return Json(AxumResponse::None {
+                                text: "⚠️ Gagal fetch gambar.".into(),
+                            });
+                        }
+                    }
+                }
+            }
         } else if text.starts_with(".bm") {
             return Json(AxumResponse::Text {
                 text: utils::menu::bot_menu().await,

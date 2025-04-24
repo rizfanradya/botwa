@@ -35,6 +35,7 @@ const startSock = async () => {
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
+    // console.log("\nMessage payload:", msg);
     try {
       const response = await fetch("http://localhost:8001/api/bot", {
         method: "POST",
@@ -42,6 +43,7 @@ const startSock = async () => {
         body: JSON.stringify(msg),
       });
       const res: any = await response.json();
+      // console.log("response api", res);
 
       if (res.type === "Text") {
         await sock.sendMessage(msg.key.remoteJid!, { text: res.text });
