@@ -1,11 +1,28 @@
 use ab_glyph::{FontArc, PxScale};
+use axum::extract::Json;
 use base64::Engine as _;
 use image::{Rgb, RgbImage, imageops};
 use imageproc::drawing::{draw_text_mut, text_size};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::process::Command;
 
-pub async fn handle_sticker_text(text: &str, command: &str) -> String {
-    let font = FontArc::try_from_vec(std::fs::read("fonts/Archivo-Regular.ttf").unwrap()).unwrap();
-    let raw_text = text.trim_start_matches(command).trim();
+#[derive(Deserialize)]
+pub struct ReqBody {
+    text: String,
+}
+
+#[derive(Serialize)]
+pub struct StickerResponse {
+    pub buffer: String,
+}
+
+pub async fn text_to_sticker(Json(msg): Json<ReqBody>) -> Json<StickerResponse> {
+    let font = FontArc::try_from_vec(
+        std::fs::read("data/fonts/Archivo-Regular.ttf").expect("❌ Gagal memuat font"),
+    )
+    .expect("❌ Font tidak valid");
+
     let mut scale = PxScale::from(130.0);
     let max_width = 492u32;
     let max_height = 492u32;
@@ -13,7 +30,7 @@ pub async fn handle_sticker_text(text: &str, command: &str) -> String {
     let wrap_text = |scale: PxScale| {
         let mut lines = Vec::new();
         let mut current_line = String::new();
-        for word in raw_text.split_whitespace() {
+        for word in msg.text.split_whitespace() {
             let test_line = if current_line.is_empty() {
                 word.to_string()
             } else {
@@ -51,13 +68,17 @@ pub async fn handle_sticker_text(text: &str, command: &str) -> String {
     }
 
     image = imageops::blur(&image, 4.0);
-    let tmp_path = "tmp/output.png";
-    image.save(tmp_path).unwrap();
+    let tmp_path = "data/tmp/output.png";
+    image.save(tmp_path).expect("❌ Gagal menyimpan gambar");
 
-    std::process::Command::new("cwebp")
-        .args([tmp_path, "-o", "tmp/output.webp"])
+    let tmp_webp = "data/tmp/output.webp";
+    Command::new("cwebp")
+        .args([tmp_path, "-o", tmp_webp])
         .status()
-        .unwrap();
+        .expect("❌ Gagal menjalankan cwebp");
 
-    base64::engine::general_purpose::STANDARD.encode(std::fs::read("tmp/output.webp").unwrap())
+    Json(StickerResponse {
+        buffer: base64::engine::general_purpose::STANDARD
+            .encode(fs::read(tmp_webp).expect("❌ Gagal membaca file WebP")),
+    })
 }

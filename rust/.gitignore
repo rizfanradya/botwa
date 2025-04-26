@@ -1,2 +1,3 @@
 /target
-/tmp
+/data/tmp/*
+!/data/tmp/readme.md
